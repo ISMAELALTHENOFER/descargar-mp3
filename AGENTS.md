@@ -33,6 +33,12 @@ npm run start -w packages/server
 
 No test framework configured yet. When added, use `npm test -w packages/server` for server tests and `npm test -w packages/web` for frontend tests.
 
+## System Dependencies
+
+- **Node.js 20+** (ES modules, `crypto.randomUUID()`)
+- **FFmpeg** (required) — must be in system PATH for audio conversion
+- **yt-dlp** (required, primary strategy) — must be in system PATH for YouTube downloads
+
 ## Code Style Guidelines
 
 ### Imports
@@ -76,25 +82,30 @@ No test framework configured yet. When added, use `npm test -w packages/server` 
 - Never expose stack traces in production; only show error details in development
 - Validate input at the middleware layer (Zod schemas) before reaching controllers
 - SSE errors are sent as typed events to the client
+- Use `console.log()` with prefixed tags for server-side logging: `[Job xxx]`, `[Batch]`, `[DownloaderFactory]`
 
 ### Architecture Patterns
 - **Clean Architecture layers**: `api/` (controllers, middleware, routes) → `core/` (business logic) → `services/` (infrastructure) → `infra/` (external concerns)
-- **Strategy Pattern**: `downloader/` with `DownloaderFactory` selecting between `YtdlStrategy` and `YtDlpStrategy`
-- **Observer Pattern**: `SSEManager` broadcasts events to SSE clients
-- **Queue Pattern**: `JobQueue` wraps `p-queue` for concurrency control
-- **Cache-aside**: `MetadataCache` checks cache first, falls through to ytdl-core
+- **Strategy Pattern**: `downloader/` with `DownloaderFactory` — **yt-dlp is primary**, ytdl-core is fallback
+- **Observer Pattern**: `SSEManager` broadcasts events to SSE clients (supports both single-job and batch-progress events)
+- **Queue Pattern**: `JobQueue` wraps `p-queue` for concurrency control (default 3 concurrent jobs)
+- **Cache-aside**: `MetadataCache` checks cache first, falls through to yt-dlp/ytdl-core
+- **Batch Processing**: `startBatchDownload` creates multiple jobs tracked by `batchId`, reports aggregate progress via SSE
 
 ### State Management (Frontend)
 - Use `useReducer` for complex UI state (see `App.tsx`)
 - Avoid state management libraries — the app is simple enough for React built-ins
 - SSE events drive state transitions
 - All API calls go through `services/api.ts`
+- File System Access API for directory selection (`services/file-system.ts`)
+- Use `useRef` for mutable state that doesn't trigger re-renders (EventSource, directory handle, saved jobs set)
 
 ### CSS / Styling
 - Tailwind CSS utility classes (no CSS modules or styled-components)
 - Custom utilities defined in `@layer components` in `index.css` (`.glass`, `.btn-primary`, `.card`, etc.)
 - Dark mode via `class="dark"` on `<html>` — `bg-surface` is the base background
 - Animations: `animate-fade-in` for mount transitions, standard Tailwind for everything else
+- Helmet CSP configured to allow `*.ytimg.com` for YouTube thumbnails
 
 ### File Structure
 ```
@@ -105,3 +116,10 @@ packages/web/src/        — React frontend
 - Each controller file maps to a resource (analyze, download, playlist)
 - Services are singletons exported as named consts (e.g., `export const jobQueue = new JobQueue()`)
 - Never import from `../core/types.js` in `api/` — controllers import services, types come from `core/types.ts`
+
+### Key Implementation Details
+- **Download buffer reuse**: `downloadFile` endpoint uses the pre-converted buffer stored in `Job.buffer` instead of re-downloading
+- **Playlist extraction**: Uses `yt-dlp --flat-playlist --dump-json` for fast playlist enumeration, then fetches metadata per item
+- **Batch SSE**: Batch progress events use `jobId: batchId` to distinguish from single-job events
+- **Directory picker**: Falls back to browser download if File System Access API not supported or user cancels
+- **Filename sanitization**: Replace `[^\w\s]` for server-side, `[<>:"/\\|?*]` for client-side file writes
