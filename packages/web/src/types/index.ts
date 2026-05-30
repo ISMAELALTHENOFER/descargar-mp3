@@ -25,10 +25,25 @@ export interface RelatedVideo {
   author: string;
 }
 
+export interface PlaylistItem {
+  id: string;
+  title: string;
+  thumbnail: string;
+  url: string;
+  duration?: number;
+}
+
+export interface PlaylistMetadata {
+  title: string;
+  items: PlaylistItem[];
+  totalItems: number;
+}
+
 export type DownloadStatus =
   | 'idle'
   | 'analyzing'
   | 'ready'
+  | 'playlist'
   | 'queued'
   | 'downloading'
   | 'converting'
@@ -37,14 +52,31 @@ export type DownloadStatus =
 
 export interface DownloadJob {
   id: string;
+  url: string;
   status: DownloadStatus;
   progress: number;
   metadata: VideoMetadata | null;
   error: string | null;
+  downloadUrl?: string;
+  title?: string;
 }
 
-export interface SSEEvent {
-  type: 'progress' | 'status' | 'error' | 'done';
-  jobId: string;
-  data: Record<string, unknown>;
+export interface BatchDownloadResponse {
+  batchId: string;
+  jobs: { jobId: string; url: string }[];
 }
+
+export interface BatchProgress {
+  total: number;
+  done: number;
+  error: number;
+  jobs: {
+    id: string;
+    status: string;
+    progress: number;
+    title?: string;
+    error?: string;
+  }[];
+}
+
+export type DownloadQuality = '128' | '192' | '320';

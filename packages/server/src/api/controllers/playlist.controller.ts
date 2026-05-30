@@ -1,5 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import ytdl from 'ytdl-core';
+import { metadataService } from '../../core/metadata/metadata.service.js';
+import { YtDlpStrategy } from '../../core/downloader/yt-dlp-strategy.js';
+import type { PlaylistItem } from '../../core/types.js';
 
 export async function getPlaylist(
   req: Request,
@@ -9,24 +12,71 @@ export async function getPlaylist(
   try {
     const { url } = req.body;
 
-    if (!url.includes('list=')) {
-      return res.status(400).json({ error: 'URL is not a playlist' });
+    try {
+      const playlistData = await YtDlpStrategy.getPlaylistInfo(url);
+
+      const results = await Promise.allSettled(
+        playlistData.items.map(async (item) => {
+          try {
+            const metadata = await metadataService.getInfo(
+              item.url || `https://youtube.com/watch?v=${item.id}`
+            );
+            return {
+              id: item.id,
+              title: metadata.title,
+              thumbnail: metadata.thumbnail,
+              url: item.url || `https://youtube.com/watch?v=${item.id}`,
+              duration: metadata.duration,
+            };
+          } catch {
+            return {
+              id: item.id,
+              title: item.title,
+              thumbnail: `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
+              url: item.url || `https://youtube.com/watch?v=${item.id}`,
+            };
+          }
+        })
+      );
+
+      const resolvedItems: PlaylistItem[] = [];
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          resolvedItems.push(r.value);
+        }
+      }
+
+      res.json({
+        title: playlistData.title,
+        items: resolvedItems,
+        totalItems: resolvedItems.length,
+      });
+    } catch {
+      if (!url.includes('list=')) {
+        return res.status(400).json({ error: 'URL is not a playlist' });
+      }
+
+      const info = await ytdl.getInfo(url);
+      const details = info.videoDetails;
+      const rawDetails = details as unknown as Record<string, unknown>;
+      const playlistTitle = (rawDetails.playlist_title as string | undefined)
+        || details.title
+        || 'Playlist';
+
+      res.json({
+        title: playlistTitle,
+        items: [
+          {
+            id: details.videoId,
+            title: details.title,
+            thumbnail: details.thumbnails?.slice(-1)[0]?.url ?? '',
+            url: `https://youtube.com/watch?v=${details.videoId}`,
+            duration: parseInt(String(details.lengthSeconds ?? '0')),
+          },
+        ],
+        totalItems: 1,
+      });
     }
-
-    const info = await ytdl.getInfo(url);
-    const playlist = info.videoDetails;
-
-    res.json({
-      title: playlist.title,
-      items: [
-        {
-          id: playlist.videoId,
-          title: playlist.title,
-          thumbnail: playlist.thumbnails?.slice(-1)[0]?.url ?? '',
-          url: `https://youtube.com/watch?v=${playlist.videoId}`,
-        },
-      ],
-    });
   } catch (err) {
     next(err);
   }

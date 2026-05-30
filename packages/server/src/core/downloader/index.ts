@@ -14,14 +14,17 @@ export class DownloaderFactory {
   static getStream(
     url: string,
     quality: DownloadQuality = '192',
-    strategy: DownloaderStrategy = 'ytdl'
+    strategy: DownloaderStrategy = 'yt-dlp'
   ): Readable {
     const downloader = this.strategies[strategy];
     try {
+      console.log(`[DownloaderFactory] Using strategy: ${strategy} for ${url}`);
       return downloader.getAudioStream(url, quality);
-    } catch {
-      if (strategy === 'ytdl') {
-        return this.strategies['yt-dlp'].getAudioStream(url, quality);
+    } catch (err) {
+      console.log(`[DownloaderFactory] Strategy ${strategy} failed:`, (err as Error).message);
+      if (strategy === 'yt-dlp') {
+        console.log('[DownloaderFactory] Falling back to ytdl-core');
+        return this.strategies['ytdl'].getAudioStream(url, quality);
       }
       throw new Error('Download failed with all strategies');
     }

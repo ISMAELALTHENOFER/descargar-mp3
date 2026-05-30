@@ -30,11 +30,13 @@ export interface PlaylistItem {
   title: string;
   thumbnail: string;
   url: string;
+  duration?: number;
 }
 
 export interface PlaylistMetadata {
   title: string;
   items: PlaylistItem[];
+  totalItems: number;
 }
 
 export type JobStatus =
@@ -53,10 +55,12 @@ export interface Job {
   metadata: VideoMetadata | null;
   error: string | null;
   createdAt: Date;
+  buffer?: Buffer;
+  filename?: string;
 }
 
 export interface SSEEvent {
-  type: 'progress' | 'status' | 'error' | 'done';
+  type: 'progress' | 'status' | 'error' | 'done' | 'batch-progress';
   jobId: string;
   data: unknown;
 }
@@ -66,4 +70,14 @@ export type DownloadQuality = '128' | '192' | '320';
 export interface DownloadOptions {
   url: string;
   quality?: DownloadQuality;
+}
+
+export interface BatchDownloadRequest {
+  urls: string[];
+  quality?: DownloadQuality;
+}
+
+export interface BatchDownloadResponse {
+  batchId: string;
+  jobs: { jobId: string; url: string }[];
 }
