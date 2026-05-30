@@ -253,14 +253,21 @@ export default function App() {
       const blob = await res.blob();
 
       if (dirHandleRef.current) {
-        await writeFileToDir(dirHandleRef.current, filename, blob);
-        log(`Saved to directory: ${filename}`);
+        try {
+          await writeFileToDir(dirHandleRef.current, filename, blob);
+          log(`Saved to directory: ${filename}`);
+        } catch (writeErr) {
+          log(`Write failed for ${filename}, falling back to browser download:`, (writeErr as Error).message);
+          await downloadBlob(blob, filename);
+          log(`Downloaded via browser fallback: ${filename}`);
+        }
       } else {
         await downloadBlob(blob, filename);
         log(`Downloaded via browser: ${filename}`);
       }
     } catch (err) {
       log(`Failed to save ${filename}:`, (err as Error).message);
+      dispatch({ type: 'ERROR', error: `Error al guardar ${filename}: ${(err as Error).message}` });
     }
   }, []);
 
@@ -276,11 +283,17 @@ export default function App() {
           dirHandleRef.current = dirHandle;
           dispatch({ type: 'SET_DIR_NAME', name: dirHandle.name });
           log('Directory selected:', dirHandle.name);
-        } catch {
+        } catch (pickErr) {
+          const pickMsg = (pickErr as Error).message;
+          if (pickMsg.includes('No se puede escribir')) {
+            dispatch({ type: 'ERROR', error: pickMsg });
+            return;
+          }
           log('Directory picker cancelled, falling back to browser download');
         }
       }
 
+      dispatch({ type: 'SET_LOADING', message: 'Starting download...' });
       const { jobId } = await startDownload(state.url, state.quality);
       dispatch({ type: 'DOWNLOADING', jobId });
       log('Job created:', jobId);
@@ -336,7 +349,12 @@ export default function App() {
           dirHandleRef.current = dirHandle;
           dispatch({ type: 'SET_DIR_NAME', name: dirHandle.name });
           log('Directory selected:', dirHandle.name);
-        } catch {
+        } catch (pickErr) {
+          const pickMsg = (pickErr as Error).message;
+          if (pickMsg.includes('No se puede escribir')) {
+            dispatch({ type: 'ERROR', error: pickMsg });
+            return;
+          }
           log('Directory picker cancelled, falling back to browser downloads');
         }
       }

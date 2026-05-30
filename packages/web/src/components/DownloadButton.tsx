@@ -16,14 +16,18 @@ export default function DownloadButton({ onClick, onQualityChange, quality }: Pr
   return (
     <div className="flex flex-col items-center gap-3 animate-fade-in">
       <div className="flex items-center gap-2">
-        <span className="text-xs text-white/40">Quality:</span>
+        <span className="text-xs text-white/60">Quality:</span>
         <select
           value={quality}
           onChange={(e) => onQualityChange(e.target.value as DownloadQuality)}
-          className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/70 outline-none focus:border-accent/50 cursor-pointer"
+          className="bg-gray-800 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-accent/50 cursor-pointer appearance-none"
         >
           {qualities.map((q) => (
-            <option key={q.value} value={q.value}>
+            <option
+              key={q.value}
+              value={q.value}
+              className="bg-gray-800 text-white"
+            >
               {q.label}
             </option>
           ))}
