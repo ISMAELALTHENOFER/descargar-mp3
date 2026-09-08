@@ -10,38 +10,11 @@ export function isFileSystemAccessSupported(): boolean {
   return typeof window.showDirectoryPicker === 'function';
 }
 
-export async function verifyDirectoryAccess(
-  dirHandle: FileSystemDirectoryHandle
-): Promise<boolean> {
-  try {
-    const testFile = await dirHandle.getFileHandle('_test_write.tmp', {
-      create: true,
-    });
-    const writable = await testFile.createWritable();
-    await writable.write(new Blob(['test']));
-    await writable.close();
-    await dirHandle.removeEntry('_test_write.tmp');
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function pickDirectory(): Promise<FileSystemDirectoryHandle> {
   if (!window.showDirectoryPicker) {
     throw new Error('File System Access API not supported');
   }
-
-  const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-
-  const canWrite = await verifyDirectoryAccess(dirHandle);
-  if (!canWrite) {
-    throw new Error(
-      'No se puede escribir en esta carpeta. Selecciona otra ubicación (ej: Escritorio, Documentos o Descargas).'
-    );
-  }
-
-  return dirHandle;
+  return await window.showDirectoryPicker({ mode: 'readwrite' });
 }
 
 export async function writeFileToDir(
@@ -61,6 +34,8 @@ export async function downloadBlob(blob: Blob, filename: string): Promise<void> 
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

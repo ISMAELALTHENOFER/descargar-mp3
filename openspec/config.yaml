@@ -1,0 +1,57 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Node.js 20+ (ESM), Express 4.19, React 18.3, Vite 5.2, TypeScript 5.4 (strict), Tailwind 3.4
+  Architecture: Clean Architecture (api/ → core/ → services/ → infra/), Strategy + Observer + Queue + Cache-aside patterns
+  Testing: None configured — no test runner, no test files. tsc --noEmit used as lint.
+  Style: ES modules with .js extensions, 2-space indent, semicolons, single quotes, kebab-case files, Zod validation
+  Monorepo: npm workspaces — packages/server (Express + tsx), packages/web (React + Vite)
+  External: FFmpeg (audio conversion), yt-dlp (primary downloader, ytdl-core fallback)
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    - Follow existing code patterns (implicit .js extensions, named exports for controllers, Zod middleware validation)
+    - Respect Clean Architecture layer boundaries (api/ never imports infra/ directly)
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: "npm run build"
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
+
+testing:
+  strict_tdd: false
+  detected: "2026-07-03"
+  runner:
+    command: ""
+    framework: ""
+  layers:
+    unit: false
+    integration: false
+    e2e: false
+  coverage:
+    available: false
+    command: ""
+  quality:
+    linter:
+      available: true
+      command: "npm run lint"
+    type_checker:
+      available: true
+      command: "tsc --noEmit"
+    formatter:
+      available: false
+      command: ""
