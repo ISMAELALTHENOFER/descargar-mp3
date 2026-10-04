@@ -23,12 +23,7 @@ import {
   startBatchDownload,
   createSSEConnection,
 } from './services/api';
-import {
-  isFileSystemAccessSupported,
-  pickDirectory,
-  writeFileToDir,
-  downloadBlob,
-} from './services/file-system';
+import { downloadBlob } from './services/file-system';
 
 function isPlaylistUrl(url: string): boolean {
   try {
@@ -59,7 +54,6 @@ interface State {
   batchId: string | null;
   batchProgress: BatchProgress | null;
   loadingMessage: string | null;
-  dirName: string | null;
 }
 
 type Action =
@@ -81,8 +75,7 @@ type Action =
   | { type: 'QUEUE_UPDATE'; jobs: DownloadJob[] }
   | { type: 'SET_QUALITY'; quality: DownloadQuality }
   | { type: 'SET_BATCH_PROGRESS'; progress: BatchProgress }
-  | { type: 'SET_LOADING'; message: string | null }
-  | { type: 'SET_DIR_NAME'; name: string | null };
+  | { type: 'SET_LOADING'; message: string | null };
 
 const initialState: State = {
   url: '',
@@ -100,7 +93,6 @@ const initialState: State = {
   batchId: null,
   batchProgress: null,
   loadingMessage: null,
-  dirName: null,
 };
 
 function reducer(state: State, action: Action): State {
@@ -189,8 +181,6 @@ function reducer(state: State, action: Action): State {
       return { ...state, batchProgress: action.progress };
     case 'SET_LOADING':
       return { ...state, loadingMessage: action.message };
-    case 'SET_DIR_NAME':
-      return { ...state, dirName: action.name };
     default:
       return state;
   }
@@ -199,7 +189,6 @@ function reducer(state: State, action: Action): State {
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const esRef = useRef<EventSource | null>(null);
-  const dirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
   const savedJobsRef = useRef<Set<string>>(new Set());
 
   const handleAnalyze = useCallback(async (url: string) => {
@@ -247,20 +236,15 @@ export default function App() {
     savedJobsRef.current.add(jobId);
 
     try {
-      log(`Saving file: ${filename}`);
+      log(`Fetching file: ${filename}`);
       const res = await fetch(`/api/v1/download/${jobId}`);
       if (!res.ok) throw new Error('Failed to fetch file');
       const blob = await res.blob();
-
-      if (dirHandleRef.current) {
-        await writeFileToDir(dirHandleRef.current, filename, blob);
-        log(`Saved to directory: ${filename}`);
-      } else {
-        await downloadBlob(blob, filename);
-        log(`Downloaded via browser: ${filename}`);
-      }
+      await downloadBlob(blob, filename);
+      log(`Downloaded: ${filename}`);
     } catch (err) {
       log(`Failed to save ${filename}:`, (err as Error).message);
+      dispatch({ type: 'ERROR', error: `Error al guardar ${filename}: ${(err as Error).message}` });
     }
   }, []);
 
@@ -269,18 +253,7 @@ export default function App() {
     try {
       log('Starting single download:', state.url);
 
-      let dirHandle: FileSystemDirectoryHandle | null = null;
-      if (isFileSystemAccessSupported()) {
-        try {
-          dirHandle = await pickDirectory();
-          dirHandleRef.current = dirHandle;
-          dispatch({ type: 'SET_DIR_NAME', name: dirHandle.name });
-          log('Directory selected:', dirHandle.name);
-        } catch {
-          log('Directory picker cancelled, falling back to browser download');
-        }
-      }
-
+      dispatch({ type: 'SET_LOADING', message: 'Starting download...' });
       const { jobId } = await startDownload(state.url, state.quality);
       dispatch({ type: 'DOWNLOADING', jobId });
       log('Job created:', jobId);
@@ -328,18 +301,6 @@ export default function App() {
   const handleBatchDownload = useCallback(async (urls: string[]) => {
     try {
       log(`Starting batch download: ${urls.length} items`);
-
-      let dirHandle: FileSystemDirectoryHandle | null = null;
-      if (isFileSystemAccessSupported()) {
-        try {
-          dirHandle = await pickDirectory();
-          dirHandleRef.current = dirHandle;
-          dispatch({ type: 'SET_DIR_NAME', name: dirHandle.name });
-          log('Directory selected:', dirHandle.name);
-        } catch {
-          log('Directory picker cancelled, falling back to browser downloads');
-        }
-      }
 
       dispatch({ type: 'SET_LOADING', message: 'Starting batch download...' });
 
@@ -433,7 +394,6 @@ export default function App() {
   const handleReset = useCallback(() => {
     esRef.current?.close();
     esRef.current = null;
-    dirHandleRef.current = null;
     savedJobsRef.current.clear();
     dispatch({ type: 'RESET' });
   }, []);
@@ -504,12 +464,6 @@ export default function App() {
           <ProgressBar progress={state.progress} status={state.status} />
         )}
 
-        {state.dirName && showingProgress && (
-          <div className="text-xs text-white/40 animate-fade-in">
-            Saving to: <span className="text-accent">{state.dirName}</span>
-          </div>
-        )}
-
         {state.batchProgress && (
           <div className="w-full card animate-fade-in">
             <div className="flex items-center justify-between mb-2">
@@ -528,11 +482,6 @@ export default function App() {
                 }}
               />
             </div>
-            {state.dirName && (
-              <div className="mt-2 text-xs text-white/40">
-                Saving to: <span className="text-accent">{state.dirName}</span>
-              </div>
-            )}
           </div>
         )}
 
@@ -555,12 +504,7 @@ export default function App() {
               Batch complete! {state.batchProgress.done} downloaded
               {state.batchProgress.error > 0 && `, ${state.batchProgress.error} failed`}
             </div>
-            {state.dirName && (
-              <p className="text-xs text-white/40">
-                Files saved to: <span className="text-accent">{state.dirName}</span>
-              </p>
-            )}
-            {!state.dirName && state.batchProgress.jobs
+            {state.batchProgress.jobs
               .filter((j) => j.status === 'done')
               .map((j) => (
                 <a
